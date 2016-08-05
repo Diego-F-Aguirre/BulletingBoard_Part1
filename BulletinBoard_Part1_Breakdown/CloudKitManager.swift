@@ -11,27 +11,40 @@ import UIKit
 import CloudKit
 
 class CloudKitManager {
-    // For our use of CloudKit here we're simply going to be using the default container with a public database
     let database = CKContainer.defaultContainer().publicCloudDatabase
     
-    // This function simply fetches the records that match a type we're looking for
     func fetchRecordsWithType(type: String, sortDescriptors: [NSSortDescriptor]? = nil, completion: ([CKRecord]?, NSError?) -> Void) {
-        // We create a query using CKQuery passing in the type and creatring a NSPredicate who's value is set to true to fetch all the items
         let query = CKQuery(recordType: type, predicate: NSPredicate(value: true))
-        // A CKQuery also needs a sort descriptor set at intialization time so we call the sortDescriptors method on the query and set the sortDescriptor function parameter to it
         query.sortDescriptors = sortDescriptors
-        // Finally on the database we performQuery to fetch our records
-        // We pass the query we created previously and set the inZoneWithID to nil and for the completionHandler we pass in the completion which hopefully is an array of CKRecords
         database.performQuery(query, inZoneWithID: nil, completionHandler: completion)
     }
     
-    // This function simply saves a CKRecord to the database
     func saveRecord(record: CKRecord, completion: ((NSError?) -> Void) = {_ in }) {
-        // all we do is call the database and saveRecord which is a method available to us on CKDatabase
-        // Since we don't need to do anything with the CKRecord in the closure let's nullify it with _
-        // Finally since the method has a completion closure of NSError let's complete with an error in case we have one
         database.saveRecord(record) { (_, error) in
             completion(error)
+        }
+    }
+    
+    // 1. This function creates a subscription to keep track of newly created records
+    // Remember that CKSubscriptions keeps track on the server of changes done to the records
+    // To get a CKRecord we're going to need to pass in the type and finally complete with an NSError? This completion is going to be set to optional and nil for it's default value
+    func subscribeToCreationOfRecordsWithType(type: String, completion: ((NSError?) -> Void)? = nil) {
+        // Here we're creating the subscription from scratch
+        let subscription = CKSubscription(recordType: Message.recordType, predicate: NSPredicate(value: true), options: .FiresOnRecordCreation)
+        // The CKNotificationInfo is what will actually show the visual alert to the user.
+        // Very similar to a UIAlertController
+        let notificationInfo = CKNotificationInfo()
+        notificationInfo.alertBody = "There's a new message on the bulletin board."
+        notificationInfo.soundName = UILocalNotificationDefaultSoundName
+        // call the method notificaitonInfo on the CKSubscription and set it to the initialized notificationInfo that we created
+        subscription.notificationInfo = notificationInfo
+        // Finally call the database and call the method on it saveSubscrition to save the subscription we created
+        // In the completion we're only going to use the error so let's check if it exist if so print an error statement and finally completes with the error
+        database.saveSubscription(subscription) { (subscription, error) in
+            if let error = error {
+                NSLog("Error saving subscription: \(error)")
+            }
+            completion?(error)
         }
     }
 }
